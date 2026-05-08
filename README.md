@@ -1,4 +1,4 @@
-# Claude Workflow Bundle
+# Human - Agent - Workflow Bundle
 
 This directory contains a reusable agent workflow for domain-driven software projects.
 It combines skills (user-invocable), subagents (spawned by skills), and helper scripts
@@ -12,21 +12,22 @@ into a single portable bundle.
 init-project          → minimal CLAUDE.md, folder structure
 domain-storytelling   → glossary, bounded contexts, relationships, seed stories
 arc42-authoring       → first-class chapters (03, 04, 05, 06, 08, 09, 10)
-init-project (again)  → full CLAUDE.md written from domain + architecture
+finalize-conventions  → full CLAUDE.md written from domain + architecture
 gherkin-story-authoring → .feature files, story index
 plan-story            → plan + test plan, draft PR
 implement-story       → tests (red), implementation (green), self-review
 merge-story-pr        → squash merge, status flip, cleanup
 ```
 
-`init-project` runs twice: once at the start to create a skeleton, once after
-`domain-storytelling` and `arc42-authoring` to write the real content.
+`init-project` needs to go in the global .claude/skills directory so that it can be called
+every time a project should be initialized.
 
 ---
 
 ## Required folder conventions
 
 The skills and scripts assume this structure. Create it once at project start.
+This is done by the init-project skill already.
 
 ```
 .claude/
@@ -76,11 +77,13 @@ start; the full version is written after `domain-storytelling` and `arc42-author
 
 | Skill | What it does |
 |---|---|
-| `init-project` | Run 1: scaffolds folder structure + minimal CLAUDE.md. Run 2: discusses implementation conventions (packages, tests, DB, API, errors, events) and writes full CLAUDE.md + pattern files |
+| `init-project` | scaffolds folder structure + minimal CLAUDE.md. |
 | `domain-storytelling` | Analyzes Egon .dst exports → glossary, context candidates, relationships, seed stories |
 | `arc42-authoring` | Designs and maintains arc42 chapters collaboratively |
+| `finialize-conventions` |  discusses implementation conventions (packages, tests, DB, API, errors, events) and writes full CLAUDE.md + pattern files |
 | `adr-writing` | Writes Architecture Decision Records in `docs/adr/` |
 | `gherkin-story-authoring` | Authors and refines `.feature` files; manages story index |
+| `chore-story` | a skill for writing tickets that deal with fixes, refactorings, small changes that dont need a userstory |
 | `backlog-grooming` | Reviews project state, suggests next stories, hands off to gherkin-story-authoring |
 | `plan-story` | Reads docs, produces Plan + Test Plan, creates branch and draft PR |
 | `implement-story` | Writes failing tests, implements, runs suite, self-reviews, marks PR ready |
