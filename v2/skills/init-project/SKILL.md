@@ -27,15 +27,13 @@ Check for `docs/arc42/04-solution-strategy.md` and `docs/arc42/08-crosscutting.m
 
 ### 1. Ask for project basics
 
-Ask the user:
-1. Project name and one-line description
-2. Tech stack: backend language/framework, frontend framework (if any), database, deployment target
-3. Test commands (e.g. `cd backend && ./gradlew test`, `npm test`)
-4. Story/Epic/ADR ID format (default: `STORY-NNN` / `EPIC-NNN` / `NNNN`)
-5. Branch naming convention (default: `STORY-NNN-kebab-case-title`)
-6. Commit message convention (default: Conventional Commits with `Refs: STORY-NNN` footer)
+Ask the user for **just two things**:
+1. Project name
+2. One-line description
 
-Wait for answers before creating any files.
+That is all you need to scaffold. **Do not ask about tech stack, test commands, database, or deployment** — none of that is known at project start; it emerges from the architecture work and is captured on the second run. Workflow conventions (ID format, branch/commit style) use sensible defaults and are not worth asking about now.
+
+Wait for the answer before creating any files.
 
 ### 2. Create folder structure
 
@@ -85,22 +83,12 @@ Create `docs/domain/context-map.md` with a header stub (the discovery-analysis s
 
 ### 3. Write minimal CLAUDE.md
 
-Write a `CLAUDE.md` with the answers from step 1, using this structure:
+Write a `CLAUDE.md` with just the name and description from step 1, using this structure. There is **no Tech stack or How to run things section yet** — those are added on the second run once the architecture is known.
 
 ```markdown
 # <project name>
 
 <one-line description>
-
-## Tech stack
-
-<tech stack bullets>
-
-## How to run things
-
-```
-<test commands>
-```
 
 ## Where things live
 
@@ -221,6 +209,8 @@ If the project has both a backend and a frontend, ask about each separately. Ask
 ### 3. Write the full CLAUDE.md
 
 Update `CLAUDE.md` with everything agreed in the discussion. Add sections for:
+- **Tech stack** — the backend language/framework, frontend framework, database, and deployment target, as established in `docs/arc42/04-solution-strategy.md` (confirm with the user if anything is unstated).
+- **How to run things** — the test/build/run commands for the stack (e.g. `./gradlew test`, `npm test`). Ask the user for these now; they weren't known at scaffold time.
 - **Domain at a glance** — **do not write or regenerate this section.** It is owned and kept current by the discovery-analysis skill (via the `domain-artifacts` contract), which rewrites it after every discovery session. Leave whatever is already there untouched. (If the section is somehow missing entirely, leave the placeholder be — the discovery skill will fill it on its next run.)
 - **Foreign systems** (one-liner per system; detail lives in `docs/arc42/03-context.md`)
 - **Frontend design conventions** (if applicable — link to pattern file)
