@@ -13,15 +13,15 @@ Reads the current state of the project and engages in a discussion with the user
 
 ## What this skill does NOT do
 
-- It does not write `.feature` files itself. Once a story is agreed, it hands off to `gherkin-story-authoring`.
+- It does not author story specs itself. Once a story is agreed, it hands off to `gherkin-story-authoring`.
 - It does not prioritise autonomously. Priority is a human decision; the skill surfaces options and trade-offs.
 - It does not invent domain concepts. Suggestions stay within the bounded contexts, glossary, and building blocks already defined.
 
 ## What to read before suggesting
 
-Spawn the `project-state-reader` subagent. It reads the **live backlog from GitHub issues**
-(the single source of truth for story state — every story is an issue), plus epics, domain
-contexts, relationships, and building blocks, and returns a compact project state snapshot.
+Spawn the `project-state-reader` subagent. It reads the **live backlog from the work-tracking
+backend** (the single source of truth for story state — every story is a work item), plus epics,
+domain contexts, relationships, and building blocks, and returns a compact project state snapshot.
 
 Wait for the snapshot before saying anything to the user.
 

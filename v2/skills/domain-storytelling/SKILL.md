@@ -78,7 +78,7 @@ For each pair of candidate contexts where an **activity crosses the boundary**, 
 
 ## Where output goes
 
-Everything is written per the `domain-artifacts` contract: the analysis record at `docs/domain/stories/<story-name>.analysis.md`, the glossary, one context file per candidate, and the merged `docs/domain/context-map.md`. Finish with the contract's CLAUDE.md `## Domain at a glance` update and the closing summary.
+Everything is written per the `domain-artifacts` contract: the analysis record at `docs/domain/stories/<story-name>.analysis.md`, the glossary, one context file per candidate, and the merged `docs/domain/context-map.md`. Finish with the contract's PROJECT.md `## Domain at a glance` update and the closing summary.
 
 ## When to push back
 
@@ -100,5 +100,5 @@ For everything else (glossary phrasing, choice of a clearly-correct relationship
 5. Extract glossary terms (Pass 2).
 6. Identify candidate contexts and write their context files (Pass 3).
 7. Build/merge the context map (Pass 4).
-8. Update the `## Domain at a glance` section in `CLAUDE.md` per the contract.
+8. Update the `## Domain at a glance` section in `PROJECT.md` per the contract.
 9. Summarize what was produced and where, in 5–10 lines, and call out anything that needs human review.

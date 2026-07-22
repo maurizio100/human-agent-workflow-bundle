@@ -1,7 +1,7 @@
 ---
 name: domain-artifacts
 model: sonnet
-description: The shared output contract for domain-discovery analysis. Defines the domain artifacts (glossary, bounded-context files, the consolidated context map), where they live under docs/domain/, their exact formats and templates, the invariants that must hold, and the CLAUDE.md update. This skill is NOT invoked directly by users — it is referenced by discovery-analysis skills (domain-storytelling, eventstorming, …) which know how to read a specific discovery method's output and then write the artifacts as specified here. If you are analyzing a discovery source, use the matching method skill; it will point you here for the output contract.
+description: The shared output contract for domain-discovery analysis. Defines the domain artifacts (glossary, bounded-context files, the consolidated context map), where they live under docs/domain/, their exact formats and templates, the invariants that must hold, and the PROJECT.md update. This skill is NOT invoked directly by users — it is referenced by discovery-analysis skills (domain-storytelling, eventstorming, …) which know how to read a specific discovery method's output and then write the artifacts as specified here. If you are analyzing a discovery source, use the matching method skill; it will point you here for the output contract.
 allowed-tools: Read Edit Write
 ---
 
@@ -14,7 +14,7 @@ This is the **method-agnostic output contract** for domain discovery. However a 
 A **discovery-analysis skill** (the "adapter") knows how to read one method's output and *what to extract* from it. It then produces the artifacts defined here. Keep the seam clean:
 
 - **The adapter decides** what counts as a term, a participant, a candidate context, an interaction, a sub-flow — using its method's vocabulary.
-- **This contract decides** the artifact set, file layout, formats/templates, invariants, and the final CLAUDE.md update.
+- **This contract decides** the artifact set, file layout, formats/templates, invariants, and the final PROJECT.md update.
 
 Do not duplicate this contract into an adapter. Reference it.
 
@@ -91,7 +91,7 @@ Analyzing a second (or third…) discovery source is a **merge-in-place**, never
 - **Context files** — open only the contexts the new source actually touches: extend Behaviour, add Participants/Concepts as needed. Untouched contexts are left alone. A genuinely new context is a new file. Never touch the Tactical model section.
 - **Context map** — add new contexts and relationship rows, then renumber the `#` column and recompute the `## Summary`. This is the only artifact where existing rows change (their `#` index), and it's cosmetic — identity is the Upstream/Downstream pair, not the number.
 - **Analysis record** — always a new file (`docs/domain/stories/<source-name>.analysis.md`), one per source; never edited to fold in another source.
-- **CLAUDE.md "Domain at a glance"** — regenerated from the merged artifacts (see Finalize).
+- **PROJECT.md "Domain at a glance"** — regenerated from the merged artifacts (see Finalize).
 
 Aim for the smallest correct diff: don't reformat, re-sort, or renumber anything the new source didn't affect (except the context-map `#`/Summary, which must stay consistent).
 
@@ -107,9 +107,9 @@ Discovery and extraction stop at the domain model. **Do not derive user stories,
 - **Ubiquitous language is sacred.** Preserve the source's exact terms; flag inconsistencies, never silently unify or rename.
 - **Strict on boundaries, permissive on drafts.** Boundary mistakes are expensive. If unsure about a context split, ask the human. For glossary phrasing, context descriptions, and a clearly-correct relationship label, proceed and let the human correct on review.
 
-## Finalize: update CLAUDE.md
+## Finalize: update PROJECT.md
 
-**This contract is the single owner of the `## Domain at a glance` section in `CLAUDE.md`.** No other skill writes or regenerates it — `init-project` only scaffolds an empty placeholder. Regenerate it here after every discovery session so it always reflects the current artifacts.
+**This contract is the single owner of the `## Domain at a glance` section in `PROJECT.md`.** No other skill writes or regenerates it — `init-project` only scaffolds an empty placeholder. Regenerate it here after every discovery session so it always reflects the current artifacts.
 
 Read all context files in `docs/domain/contexts/`, the glossary, and `docs/domain/context-map.md`, then rewrite the section with a 3–5 line summary covering: what the system does, who the actors are, the bounded contexts by name, and the core workflow as a short flow. End with a pointer to `docs/domain/` for the full model. If the section does not exist, add it after `## Where things live` (or after `## Tech stack` if that section doesn't exist). If it exists, replace it in place.
 

@@ -9,11 +9,14 @@ allowed-tools: Read Edit Write Bash
 
 ## What this skill does
 
-Creates a lightweight **GitHub issue** (with a Markdown body) for non-behavioral changes that don't warrant Gherkin scenarios. The issue is the single source of truth for the chore's spec content (ADR-0021) — there is no `.md` file in `specs/stories/`. Chore stories provide traceability (every code change links to a story) without the overhead of writing Given/When/Then for things like CSS tweaks or rename refactorings.
+Creates a lightweight **work item** (with a Markdown body) for non-behavioral changes that don't warrant Gherkin scenarios. The work item is the single source of truth for the chore's spec content — there is no `.md` file in `specs/stories/`. Chore stories provide traceability (every code change links to a story) without the overhead of writing Given/When/Then for things like CSS tweaks or rename refactorings.
+
+All tracker operations go through the `work-tracking` façade
+(`python3 .claude/skills/work-tracking/tracker.py <command>`); never call a forge CLI directly.
 
 ## What this skill does NOT do
 
-- It does not create Gherkin issues. If the change has observable behavioral acceptance criteria, use `gherkin-story-authoring` instead.
+- It does not create Gherkin stories. If the change has observable behavioral acceptance criteria, use `gherkin-story-authoring` instead.
 - It does not run `plan-story`. Chores go straight to implementation.
 
 ## When to use chore vs. feature
@@ -33,12 +36,12 @@ When in doubt, ask the user.
 
 ### IDs and titles
 
-- Each chore is one GitHub issue titled `STORY-NNN: <human-readable title>`. IDs are sequential and shared with feature stories — never reuse an ID. Always allocate with `story-index.py create` (it picks the next id for you).
-- Classification (`epic`, `layer`, `context`, `type:chore`) is passed as flags and becomes labels — not header comments in the body.
+- Each chore is one work item titled `STORY-NNN: <human-readable title>`. IDs are sequential and shared with feature stories — never reuse an ID. Always allocate with `tracker.py create` (it picks the next id for you).
+- Classification (`epic`, `layer`, `context`, `type:chore`) is passed as flags and becomes work-item metadata — not header comments in the body.
 
-### Structure of a chore issue body
+### Structure of a chore body
 
-The body is Markdown — no classification-header comments (those go to flags/labels):
+The body is Markdown — no classification-header comments (those go to flags/metadata):
 
 ```markdown
 ## <Human-readable title>
@@ -52,18 +55,18 @@ Motivation — what prompted this. A sentence or two is enough.
 
 ### Status lifecycle
 
-Status lives on the GitHub issue (the `status:` label + open/closed state), not in the file. Chores follow a simplified lifecycle — no plan phase:
+Status lives on the work item (the `status:` value + open/closed state), not in a file. Chores follow a simplified lifecycle — no plan phase:
 
 ```
 draft → ready → in-progress → done
 ```
 
-- `draft`: issue created by this skill
+- `draft`: work item created by this skill
 - `ready`: human approves (same gate as feature stories)
 - `in-progress`: branch created, work starts
-- `done`: PR merged (issue closed)
+- `done`: change request merged (work item closed)
 
-Every transition is applied with `story-index.py gh-status STORY-NNN <status>`; the status lives only on the issue.
+Every transition is applied with `tracker.py set-status STORY-NNN <status>`; the status lives only on the work item.
 
 ### Who flips the status
 
@@ -72,7 +75,7 @@ Every transition is applied with `story-index.py gh-status STORY-NNN <status>`; 
 | *(none)* → `draft` | `chore-story` | On creation |
 | `draft` → `ready` | `chore-story` | On explicit human approval |
 | `ready` → `in-progress` | human / agent | When implementation starts on the branch |
-| `in-progress` → `done` | `merge-story-pr` | After the PR is merged |
+| `in-progress` → `done` | `merge-story-pr` | After the change request is merged |
 
 ## Steps
 
@@ -89,34 +92,34 @@ Keep the discussion brief. Chores are small by definition.
 
 ### 2. Create the story
 
-Write the `### What` / `### Why` Markdown body to a scratch file, then create the issue:
+Write the `### What` / `### Why` Markdown body to a scratch file, then create the work item:
 
 ```
-cd "$(git rev-parse --show-toplevel)" && python3 .claude/skills/gherkin-story-authoring/story-index.py create \
+cd "$(git rev-parse --show-toplevel)" && python3 .claude/skills/work-tracking/tracker.py create \
   --title "<title>" --epic EPIC-NNN --layer <layer> --context "<context or —>" --type chore \
   --body-file <scratch-file>
 ```
 
-This allocates the next id and creates an issue titled `STORY-NNN: <title>` with the body as content and `epic:`/`context:`/`layer:`/`type:chore` labels plus `status:draft` (and the epic milestone). It prints the allocated `STORY-NNN` and the issue URL. The same helper backs feature stories, so chores and features land in one unified issue backlog — the issue **is** the story record. There is nothing to commit at this step.
+This allocates the next id and creates a work item titled `STORY-NNN: <title>` with the body as content and `epic:`/`context:`/`layer:`/`type:chore` metadata plus `status:draft` (and the epic grouping). It prints the allocated `STORY-NNN` and the work-item ref/URL. The same helper backs feature stories, so chores and features land in one unified backlog — the work item **is** the story record. There is nothing to commit at this step.
 
 ### 3. Await approval
 
 Present the story to the user. Only flip to `ready` on explicit human approval (same gate as feature stories). On approval:
 
 ```
-cd "$(git rev-parse --show-toplevel)" && python3 .claude/skills/gherkin-story-authoring/story-index.py gh-status STORY-NNN ready
+cd "$(git rev-parse --show-toplevel)" && python3 .claude/skills/work-tracking/tracker.py set-status STORY-NNN ready
 ```
 
 ### 4. Create branch and start
 
-Once `ready`, create the story branch and move the issue to `in-progress`:
+Once `ready`, create the story branch and move the work item to `in-progress`:
 
 ```bash
 git checkout -b STORY-NNN-kebab-title main
-cd "$(git rev-parse --show-toplevel)" && python3 .claude/skills/gherkin-story-authoring/story-index.py gh-status STORY-NNN in-progress
+cd "$(git rev-parse --show-toplevel)" && python3 .claude/skills/work-tracking/tracker.py set-status STORY-NNN in-progress
 ```
 
-Status changes are GitHub operations, not commits — there is no file or index edit to make.
+Status changes are tracker operations, not commits — there is no file or index edit to make.
 
 The user (or agent) then implements the change directly — no plan-story or implement-story needed.
 
@@ -137,9 +140,9 @@ Refs: STORY-NNN
 ```
 Use `feat:` if the change adds something visible (even if non-behavioral), `refactor:` for pure restructuring, `chore:` for everything else.
 
-### 6. Open a PR and mark ready
+### 6. Open a change request and mark ready
 
-Push the branch and open a PR:
+Push the branch and open a change request:
 - Title: `STORY-NNN: <human-readable title>`
 - Body: brief summary of what changed and a short manual test plan.
 - Open as **ready for review** (not draft) — chores are small and implementation is complete at this point.

@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
-"""Story management via GitHub issues.
+"""GitHub adapter — work items & epics (implements the work-tracking tracker CLI).
 
-GitHub issues are the single source of truth for story state (status, epic,
-context, layer, type) AND for story spec content — the issue body holds the
-Gherkin / chore spec (see ADR-0021). There are no authored story files: content
-is composed into the issue on `create` and edited in place with `update-body`.
+Maps the work-tracking contract onto GitHub:
+  story        -> issue titled `STORY-NNN: <title>` (body = spec content)
+  status       -> `status:<...>` label + open/closed state
+  epic         -> milestone titled `EPIC-NNN: <name>` (description = goal/stories/scope)
+  classification (epic/context/layer/type) -> labels
 
-`specs/done/` and `specs/cancelled/` remain as legacy pre-migration archives and
-are still consulted by `next-id` so IDs are never reused.
+The issue is the single source of truth for both story state and spec content.
+`specs/done/` and `specs/cancelled/` remain as legacy pre-migration archives and are
+still consulted by `next-id` so IDs are never reused.
+
+This file is invoked via the façade `skills/work-tracking/tracker.py`, which forwards
+argv here when `adapter.conf` selects `github`. Callers should be at the repo root; this
+script re-anchors there regardless.
 """
 
 import json
@@ -103,12 +109,14 @@ def _github_story_ids():
     return ids
 
 
-def cmd_next_id(args):
-    """Next available STORY-NNN — the max over GitHub issues AND legacy files.
+def _allocate_id():
+    """Next STORY-NNN as an int-backed string id (max over issues + legacy + 1)."""
+    ids = _github_story_ids() | _legacy_story_ids()
+    return f"STORY-{(max(ids) + 1 if ids else 1):03d}"
 
-    Both are consulted so an ID is never reused, even if an old issue was
-    closed/superseded or a legacy file was never mirrored.
-    """
+
+def cmd_next_id(args):
+    """Next available STORY-NNN — the max over GitHub issues AND legacy files."""
     gh_ids = _github_story_ids()
     if not gh_ids and not _gh_available():
         print("warning: gh unavailable; allocating from legacy files only — "
@@ -119,7 +127,7 @@ def cmd_next_id(args):
     print(f"STORY-{next_num:03d}")
 
 
-# --- GitHub issues ----------------------------------------------------------
+# --- GitHub plumbing --------------------------------------------------------
 
 def _gh_available():
     """True if the gh CLI is installed and authenticated."""
@@ -139,14 +147,7 @@ def _gh(*args, check=True, capture=True):
 
 
 def _epic_milestone_title(epic):
-    """Full milestone title for an epic id.
-
-    Epics live as GitHub milestones (ADR-0021): the milestone titled
-    `EPIC-NNN: <name>` carries the epic's description. Resolve the full title by
-    querying milestones for one whose title starts with the epic id. Falls back
-    to the bare epic id if no milestone exists yet (a new epic), in which case
-    `_ensure_milestone` creates a placeholder the author can flesh out.
-    """
+    """Full milestone title for an epic id (`EPIC-NNN: <name>`), or the bare id."""
     if _dash(epic):
         return None
     result = _gh("api", "repos/{owner}/{repo}/milestones?state=all&per_page=100",
@@ -163,11 +164,7 @@ def _dash(value):
 
 
 def _valid_contexts():
-    """Bounded-context vocabulary, derived from docs/domain/contexts/*.md stems.
-
-    Returns an empty set when the directory is absent, in which case context
-    validation is skipped (the tool still works in repos without domain docs).
-    """
+    """Bounded-context vocabulary, derived from docs/domain/contexts/*.md stems."""
     if not CONTEXTS_DIR.exists():
         return set()
     return {p.stem.lower() for p in CONTEXTS_DIR.glob("*.md")}
@@ -175,8 +172,7 @@ def _valid_contexts():
 
 def _validate_metadata(story_id, context, layer, story_type):
     """Fail loudly on unknown context/layer/type values instead of minting
-    drifted labels. Comma-separated contexts are each checked; `—`
-    (cross-cutting) is always allowed for context and layer."""
+    drifted labels."""
     errors = []
     valid_contexts = _valid_contexts()
     if valid_contexts and not _dash(context):
@@ -199,12 +195,7 @@ def _validate_metadata(story_id, context, layer, story_type):
 
 
 def _clean_body(text):
-    """Drop a leading classification-header block from a supplied body.
-
-    Only the contiguous run of header lines at the top (plus any blank lines
-    before real content) is stripped, so `#` comments or Markdown headings later
-    in the body are left intact.
-    """
+    """Drop a leading classification-header block from a supplied body."""
     out = []
     in_header = True
     for line in text.splitlines():
@@ -244,14 +235,17 @@ def _ensure_label(label):
         "--description", label, "--force", check=False)
 
 
-def _ensure_milestone(title):
+def _ensure_milestone(title, description=None):
     if not title:
         return
     existing = _gh("api", "repos/{owner}/{repo}/milestones?state=all",
                    "--jq", ".[].title", check=False)
     if title in (existing.stdout or "").splitlines():
         return
-    _gh("api", "repos/{owner}/{repo}/milestones", "-f", f"title={title}", check=False)
+    cmd = ["api", "repos/{owner}/{repo}/milestones", "-f", f"title={title}"]
+    if description is not None:
+        cmd += ["-F", f"description={description}"]
+    _gh(*cmd, check=False)
 
 
 def _find_issue(story_id):
@@ -303,12 +297,7 @@ def _read_body(body_file):
 
 
 def cmd_create(args):
-    """create --title T --body-file F [--epic E] [--layer L] [--context C] [--type feature|chore]
-
-    Allocate the next STORY id and create its GitHub issue as `status:draft`,
-    with the composed spec content as the body. The issue IS the story — no file
-    is written. Prints the allocated id and the issue URL.
-    """
+    """create --title T --body-file F [--epic E] [--layer L] [--context C] [--type feature|chore]"""
     vals = _parse_flags(args, {
         "title": True, "body-file": True,
         "epic": False, "layer": False, "context": False, "type": False,
@@ -322,9 +311,7 @@ def cmd_create(args):
     context = vals["context"] or "—"
     story_type = (vals["type"] or "feature").strip().lower()
 
-    # Allocate the id (max over issues + legacy files, +1).
-    ids = _github_story_ids() | _legacy_story_ids()
-    story_id = f"STORY-{(max(ids) + 1 if ids else 1):03d}"
+    story_id = _allocate_id()
 
     _validate_metadata(story_id, context, layer, story_type)
     body = _read_body(vals["body-file"])
@@ -361,11 +348,7 @@ def cmd_create(args):
 
 
 def cmd_update_body(args):
-    """update-body <id> --body-file F — replace the issue body (a refinement).
-
-    This is the edit path that keeps content current: because the issue IS the
-    source of truth, refining a story means editing its body here.
-    """
+    """update-body <id> --body-file F — replace the issue body (a refinement)."""
     if not args or args[0].startswith("-"):
         print("error: update-body requires: <id> --body-file F", file=sys.stderr)
         sys.exit(1)
@@ -398,10 +381,10 @@ def cmd_update_body(args):
         sys.exit(1)
 
 
-def cmd_gh_status(args):
-    """gh-status <id> <status> — set the status label and open/closed state."""
+def cmd_set_status(args):
+    """set-status <id> <status> — set the status label and open/closed state."""
     if len(args) != 2:
-        print("error: gh-status requires 2 arguments: <id> <new-status>", file=sys.stderr)
+        print("error: set-status requires 2 arguments: <id> <new-status>", file=sys.stderr)
         sys.exit(1)
     story_id, new_status = args
     if not _gh_available():
@@ -432,12 +415,7 @@ def cmd_gh_status(args):
 
 
 def cmd_resolve(args):
-    """resolve <id> — print the story's issue as JSON {number,title,body,labels}.
-
-    One source of truth for "STORY-NNN -> issue", replacing the hand-rolled
-    `gh issue list --search ... | jq startswith | head -1` pipeline that was
-    duplicated across skills and agents.
-    """
+    """resolve <id> — print the story's issue as JSON {ref,title,body,labels}."""
     if len(args) != 1:
         print("error: resolve requires 1 argument: <id>", file=sys.stderr)
         sys.exit(1)
@@ -453,7 +431,48 @@ def cmd_resolve(args):
     if result.returncode != 0:
         print(f"error: could not read issue #{number} for {story_id}", file=sys.stderr)
         sys.exit(1)
-    sys.stdout.write(result.stdout)
+    try:
+        data = json.loads(result.stdout or "{}")
+    except json.JSONDecodeError:
+        print(f"error: could not parse issue #{number} for {story_id}", file=sys.stderr)
+        sys.exit(1)
+    out = {
+        "ref": str(data.get("number", number)),
+        "title": data.get("title", ""),
+        "body": data.get("body", ""),
+        "labels": [l["name"] for l in data.get("labels", [])],
+    }
+    print(json.dumps(out))
+
+
+def cmd_list(args):
+    """list [--state open|all] — backlog as JSON [{ref,title,state,labels,epic}]."""
+    vals = _parse_flags(args, {"state": False})
+    state = vals["state"] or "all"
+    if not _gh_available():
+        print("error: gh CLI required to list the backlog", file=sys.stderr)
+        sys.exit(1)
+    result = _gh("issue", "list", "--state", state, "--limit", "1000",
+                 "--json", "number,title,state,labels,milestone", check=False)
+    if result.returncode != 0:
+        print(f"error: could not list issues: {result.stderr.strip()}", file=sys.stderr)
+        sys.exit(1)
+    try:
+        issues = json.loads(result.stdout or "[]")
+    except json.JSONDecodeError:
+        issues = []
+    out = []
+    for it in issues:
+        if not str(it.get("title", "")).startswith("STORY-"):
+            continue
+        out.append({
+            "ref": str(it.get("number", "")),
+            "title": it.get("title", ""),
+            "state": it.get("state", ""),
+            "labels": [l["name"] for l in it.get("labels", [])],
+            "epic": (it.get("milestone") or {}).get("title", ""),
+        })
+    print(json.dumps(out))
 
 
 def cmd_epic(args):
@@ -473,45 +492,77 @@ def cmd_epic(args):
     sys.stdout.write(result.stdout or "")
 
 
+def cmd_create_epic(args):
+    """create-epic --title T --body-file F — create the epic grouping (milestone)."""
+    vals = _parse_flags(args, {"title": True, "body-file": True})
+    if not _gh_available():
+        print("error: gh CLI required to create an epic", file=sys.stderr)
+        sys.exit(1)
+    title = vals["title"]
+    body_path = vals["body-file"]
+    if body_path == "-":
+        description = sys.stdin.read()
+    else:
+        p = Path(body_path)
+        if not p.exists():
+            print(f"error: body file not found: {body_path}", file=sys.stderr)
+            sys.exit(1)
+        description = p.read_text()
+    _ensure_milestone(title, description)
+    print(f"ensured epic milestone: {title}")
+
+
+def cmd_comment(args):
+    """comment <id> --body B — append a note to the story's issue."""
+    if not args or args[0].startswith("-"):
+        print("error: comment requires: <id> --body B", file=sys.stderr)
+        sys.exit(1)
+    story_id, rest = args[0], args[1:]
+    vals = _parse_flags(rest, {"body": True})
+    if not _gh_available():
+        print(f"note: gh unavailable; skipping comment on {story_id}")
+        return
+    number = _find_issue(story_id)
+    if number is None:
+        print(f"note: no issue found for {story_id}; nothing to comment on")
+        return
+    result = _gh("issue", "comment", str(number), "--body", vals["body"], check=False)
+    if result.returncode == 0:
+        print(f"commented on issue #{number} for {story_id}")
+    else:
+        print(f"error: failed to comment on issue #{number}: {result.stderr.strip()}",
+              file=sys.stderr)
+        sys.exit(1)
+
+
 COMMANDS = {
     "next-id": cmd_next_id,
     "create": cmd_create,
     "update-body": cmd_update_body,
-    "gh-status": cmd_gh_status,
+    "set-status": cmd_set_status,
     "resolve": cmd_resolve,
+    "list": cmd_list,
     "epic": cmd_epic,
+    "create-epic": cmd_create_epic,
+    "comment": cmd_comment,
 }
 
 USAGE = """\
-Usage: story-index.py <command> [args]
+Usage: tracker.py <command> [args]   (GitHub adapter for the work-tracking contract)
 
-GitHub issues are the single source of truth for story state AND spec content
-(ADR-0021). This helper allocates IDs and creates / edits the issues.
+GitHub issues are the single source of truth for story state AND spec content.
+Invoke through the façade: python3 .claude/skills/work-tracking/tracker.py <command>
 
 Commands:
   next-id
-      Print the next available STORY-NNN ID (max over GitHub issues and the
-      legacy specs/done, specs/cancelled archives, +1).
-
   create --title T --body-file F [--epic E] [--layer L] [--context C] [--type feature|chore]
-      Allocate the next id and create the story's GitHub issue as draft, using
-      the file's contents (or - for stdin) as the spec-content body. Validates
-      context/layer/type and applies epic/context/layer/type labels plus the
-      epic milestone. Prints the allocated STORY-NNN and issue URL. Needs gh.
-
   update-body <id> --body-file F
-      Replace the issue body with new spec content (the refinement path). Needs gh.
-
-  gh-status <id> <new-status>
-      Set the issue's status label and open/closed state.
-      No-op if gh is unavailable or no matching issue exists.
-
-  resolve <id>
-      Print the story's GitHub issue as JSON: {number, title, body, labels}.
-      One source of truth for "STORY-NNN -> issue"; exits non-zero if not found.
-
-  epic <EPIC-NNN>
-      Print the epic milestone's description (empty if the milestone is absent)."""
+  set-status <id> <new-status>
+  resolve <id>                      -> JSON {ref,title,body,labels}
+  list [--state open|all]           -> JSON [{ref,title,state,labels,epic}]
+  epic <EPIC-NNN>                   -> epic milestone description
+  create-epic --title T --body-file F
+  comment <id> --body B"""
 
 if __name__ == "__main__":
     if len(sys.argv) < 2 or sys.argv[1] not in COMMANDS:

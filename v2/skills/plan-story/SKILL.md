@@ -1,7 +1,7 @@
 ---
 name: plan-story
 model: opus
-description: Plan a user story — read all relevant docs, produce the Plan + Test Plan artifact, write it to docs/plans/STORY-NNN.md and the draft PR body, create the story branch. Ends at the Plan human gate; does not touch any production code. Use this when the user wants to plan a story before implementing it, or when plan-story and implement-story are being run as separate steps.
+description: Plan a user story — read all relevant docs, produce the Plan + Test Plan artifact, write it to docs/plans/STORY-NNN.md and the change-request body, create the story branch. Ends at the Plan human gate; does not touch any production code. Use this when the user wants to plan a story before implementing it, or when plan-story and implement-story are being run as separate steps.
 ---
 
 # Plan Story
@@ -9,46 +9,51 @@ description: Plan a user story — read all relevant docs, produce the Plan + Te
 ## What this skill does
 
 Covers Steps 0–3 of the TDD loop: story selection, full reading pass, Plan + Test Plan
-production, story refinement (if needed), branch creation, and draft PR opening.
+production, story refinement (if needed), branch creation, and draft change-request opening.
 
 **Ends at the Plan gate.** The agent posts the plan, writes it to `docs/plans/STORY-NNN.md`,
 and waits for human approval. It does not write any tests or production code.
 
 The output of this skill is the input to `implement-story`.
 
+All tracker / change-request operations go through the `work-tracking` façade
+(`python3 .claude/skills/work-tracking/tracker.py` and `.../review.py`); never call a forge CLI
+directly.
+
 ## What this skill does NOT do
 
 - It does not write tests or implementation code.
 - It does not modify Gherkin stories. If the story needs refinement, it stops and hands
   back to `gherkin-story-authoring`.
-- It does not merge PRs.
+- It does not merge change requests.
 
 ## Step 0 — Story selection (only if no story was specified)
 
 If the user invoked the skill without naming a specific story:
 
-1. List the open backlog from GitHub issues (the source of truth for story state):
+1. List the open backlog from the tracker (the source of truth for story state):
 
    ```bash
-   gh issue list --state open --limit 1000 --json number,title,labels \
-     --jq '.[] | {t:.title, status:([.labels[].name | select(startswith("status:"))][0])}'
+   cd "$(git rev-parse --show-toplevel)" && python3 .claude/skills/work-tracking/tracker.py list --state open
    ```
 
-   If `gh` is unavailable, tell the user story selection needs GitHub access and stop.
-2. Filter to issues labelled `status:draft`, `status:ready`, or `status:in-progress`.
+   This returns JSON, one object per story: `{ref, title, state, labels, epic}`. The `status:…`
+   value is in `labels`. If the tracker is unavailable, tell the user story selection needs the
+   work-tracking backend and stop.
+2. Filter to stories whose status is `draft`, `ready`, or `in-progress`.
 3. Present a numbered list grouped by status:
    - `ready` — fully eligible, no caveats
    - `draft` — selectable, but labelled _(draft — planner may discover refinement is needed)_
    - `in-progress` — not selectable; show with a note that a branch is already open for it
 4. Ask the user to pick one. Wait for the answer before doing anything else.
 
-If no issues are `status:ready` or `status:draft`, tell the user and stop.
+If no stories are `ready` or `draft`, tell the user and stop.
 
 If the user named a story, skip this step.
 
 ## Step 1 — Research
 
-Spawn the `story-researcher` subagent with the story ID. It reads the feature file, epic,
+Spawn the `story-researcher` subagent with the story ID. It reads the story spec, epic,
 domain context, glossary, relationships, building blocks, test strategy, and relevant ADRs,
 and returns a structured summary.
 
@@ -68,7 +73,7 @@ can read it without opening the file.
 ```markdown
 ## Story
 STORY-NNN: <title>
-Link: <GitHub issue URL>
+Link: <work-item ref/URL>
 
 ## Understanding
 <2-4 sentences restating what the story asks for, in the agent's own words.
@@ -80,7 +85,7 @@ from docs/arc42/05-building-blocks.md. References relevant ADRs from docs/adr/.>
 
 ## Test Plan
 <For each Gherkin scenario: the test name, the test level and framework as defined in
-docs/arc42/08-crosscutting.md. Use the story's `layer:` label to determine
+docs/arc42/08-crosscutting.md. Use the story's `layer:` value to determine
 which section of the test strategy applies. Also list additional unit tests not tied to
 a scenario.>
 
@@ -128,18 +133,17 @@ If, while writing the plan, the agent discovers:
 Stop. Write what is understood and what is missing into a refinement note. Hand back to
 `gherkin-story-authoring`. Do not guess.
 
-## Step 4 — Branch and draft PR
+## Step 4 — Branch and draft change request
 
 After the human approves the plan:
 
-1. Verify the issue's status is `status:ready` or `status:draft`. If `status:in-progress`, stop — a branch already exists.
-2. Move the issue to in-progress: `cd "$(git rev-parse --show-toplevel)" && python3 .claude/skills/gherkin-story-authoring/story-index.py gh-status STORY-NNN in-progress`. This is a GitHub operation — there is no file or index status to edit, and nothing to commit for it.
+1. Verify the story's status is `ready` or `draft`. If `in-progress`, stop — a branch already exists.
+2. Move the story to in-progress: `cd "$(git rev-parse --show-toplevel)" && python3 .claude/skills/work-tracking/tracker.py set-status STORY-NNN in-progress`. This is a tracker operation — there is no file or index status to edit, and nothing to commit for it.
 3. Create branch `STORY-NNN-<slug>` from the default branch.
 4. Write the plan to `docs/plans/STORY-NNN.md` and commit: `docs: add plan for STORY-NNN`.
-5. Run `cd "$(git rev-parse --show-toplevel)" && python3 .claude/skills/plan-story/push-draft.py STORY-NNN` — pushes the branch and opens a draft PR
-   with the plan as body.
+5. Run `cd "$(git rev-parse --show-toplevel)" && python3 .claude/skills/work-tracking/review.py open-draft STORY-NNN` — pushes the branch and opens a draft change request with the plan as body.
 
-After pushing the branch and opening the draft PR, invoke the `implement-story` skill to
+After pushing the branch and opening the draft change request, invoke the `implement-story` skill to
 continue autonomously — or stop here if the user has asked to plan only.
 
 ## When to push back

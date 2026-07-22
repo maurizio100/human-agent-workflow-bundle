@@ -7,8 +7,8 @@
           {
             "type": "command",
             "if": "Bash(git commit*)",
-            "command": "staged=$(git diff --cached --name-only | grep -E 'kts?$'); if [ -n \"$staged\" ]; then (cd backend && ./gradlew ktlintFormat -q >/dev/null 2>&1); echo \"$staged\" | xargs git add; fi; true",
-            "statusMessage": "Formatting Kotlin (ktlintFormat) before commit..."
+            "command": "staged=$(git diff --cached --name-only); if [ -n \"$staged\" ]; then REPLACE_WITH_YOUR_FORMATTER $staged >/dev/null 2>&1; echo \"$staged\" | xargs git add; fi; true",
+            "statusMessage": "TEMPLATE: run your project's formatter on staged files before commit (edit REPLACE_WITH_YOUR_FORMATTER in settings.json)"
           }
         ]
       }
@@ -19,15 +19,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "file=$(jq -r '.tool_input.file_path // \"\"'); echo \"$file\" | grep -qE '\\.kt$' && cd backend && ./gradlew compileKotlin 2>&1 | tail -10 || true",
+            "command": "file=$(jq -r '.tool_input.file_path // \"\"'); [ -n \"$file\" ] && REPLACE_WITH_YOUR_TYPECHECK 2>/dev/null | tail -10 || true",
             "async": true,
-            "statusMessage": "Checking Kotlin compilation..."
-          },
-          {
-            "type": "command",
-            "command": "file=$(jq -r '.tool_input.file_path // \"\"'); echo \"$file\" | grep -qE '\\.ts$' && [ -d frontend ] && cd frontend && npx tsc --noEmit 2>&1 | tail -10 || true",
-            "async": true,
-            "statusMessage": "Checking TypeScript types..."
+            "statusMessage": "TEMPLATE: run your project's typecheck/compile on the edited file (edit REPLACE_WITH_YOUR_TYPECHECK in settings.json)"
           }
         ]
       },
@@ -36,7 +30,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r '.tool_input.command // \"\"' | grep -qE 'gradlew test|npm test' && echo '{\"systemMessage\":\"Test suite finished.\"}' || true"
+            "command": "jq -r '.tool_input.command // \"\"' | grep -qE 'REPLACE_WITH_YOUR_TEST_COMMAND' && echo '{\"systemMessage\":\"Test suite finished.\"}' || true"
           }
         ]
       }
@@ -46,7 +40,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "branch=$(git branch --show-current 2>/dev/null); echo \"$branch\" | grep -qE '^STORY-[0-9]+' && printf '{\"systemMessage\":\"Branch %s — remember to run the full test suite before marking the PR ready.\"}\\n' \"$branch\" || echo '{}'"
+            "command": "branch=$(git branch --show-current 2>/dev/null); echo \"$branch\" | grep -qE '^STORY-[0-9]+' && printf '{\"systemMessage\":\"Branch %s — remember to run the full test suite before marking the change request ready.\"}\\n' \"$branch\" || echo '{}'"
           }
         ]
       }

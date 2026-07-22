@@ -14,7 +14,7 @@ You will receive a decision topic and optionally the names of arc42 chapters mos
 
 ## What to do
 
-1. **Next ADR ID**: run `bash .claude/skills/adr-writing/next-adr-id.sh` from the repo root.
+1. **Next ADR ID**: run `python3 .claude/skills/adr-writing/next-adr-id.py` from the repo root.
 2. **Related ADRs**: read `docs/arc42/09-decisions.md` for the index. Open any ADR files whose title overlaps with the topic. For each, note number, title, status, and one sentence on its relevance.
 3. **Arc42 context**: read the chapter(s) specified in the input (or infer from the topic). Extract the 2–5 sentences most relevant to the decision at hand.
 

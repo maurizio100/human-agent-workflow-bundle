@@ -1,6 +1,6 @@
 ---
 name: gherkin-story-authoring
-description: Author and refine Gherkin user stories as GitHub issues with proper IDs, epic grouping, declarative steps, and acceptance criteria suitable for triggering an agent-driven TDD loop. Use this skill whenever the user wants to write a new user story from a product goal or feature request, refine an existing story, group stories into epics, or split a story that's too large. Trigger this even when the user says "let's write a story" or "draft a feature file" without naming Gherkin explicitly. Use this skill whenever a story's Gherkin needs to be created or edited.
+description: Author and refine Gherkin user stories as tracked work items with proper IDs, epic grouping, declarative steps, and acceptance criteria suitable for triggering an agent-driven TDD loop. Use this skill whenever the user wants to write a new user story from a product goal or feature request, refine an existing story, group stories into epics, or split a story that's too large. Trigger this even when the user says "let's write a story" or "draft a feature file" without naming Gherkin explicitly. Use this skill whenever a story's Gherkin needs to be created or edited.
 model: sonnet
 allowed-tools: Read Edit Write Bash
 ---
@@ -9,7 +9,16 @@ allowed-tools: Read Edit Write Bash
 
 ## What this skill does
 
-Produces and maintains **GitHub issues** whose body holds the story's Gherkin, grouped by epics that live as GitHub milestones. The issue is the single source of truth for the story's spec content (ADR-0021) — there is no `.feature` file. Stories produced by this skill are the **trigger** for the agent's TDD execution loop — they need to be unambiguous enough that the planner can derive a test plan from them without guessing.
+Produces and maintains **work items** (managed through the `work-tracking` contract) whose body
+holds the story's Gherkin, grouped into epics. The work item is the single source of truth for
+the story's spec content — there is no separate `.feature` file. Stories produced by this skill
+are the **trigger** for the agent's TDD execution loop — they need to be unambiguous enough that
+the planner can derive a test plan from them without guessing.
+
+All tracker operations go through the façade
+`python3 .claude/skills/work-tracking/tracker.py <command>` (see the `work-tracking` contract);
+never call a forge CLI directly. The active backend (GitHub, etc.) is a project choice recorded in
+the contract's `adapter.conf`.
 
 ## What this skill does NOT do
 
@@ -30,13 +39,13 @@ pass all relevant context names so the subagent reads them together.
 
 ### IDs and titles
 
-- Each story is one GitHub issue titled `STORY-NNN: <human-readable title>`, where `NNN` is zero-padded to 3 digits.
-- IDs are sequential and never reused. Always allocate with `story-index.py next-id` (it takes the max over existing issues **and** the legacy archives, so a superseded/closed ID is never reused). Never hand-pick an ID.
-- Epics: GitHub milestones titled `EPIC-NNN: <name>` (see [Epics](#epics)).
+- Each story is one work item titled `STORY-NNN: <human-readable title>`, where `NNN` is zero-padded to 3 digits.
+- IDs are sequential and never reused. Always allocate with `tracker.py next-id` (it takes the max over existing work items **and** the legacy archives, so a superseded/closed ID is never reused). Never hand-pick an ID.
+- Epics: an epic grouping titled `EPIC-NNN: <name>` (see [Epics](#epics)).
 
-### Structure of the issue body
+### Structure of the work-item body
 
-The issue body is **pure Gherkin** — no classification-header comments. The story's identity and classification (`STORY-NNN`, epic, layer, context, type) live on the issue title and its `epic:` / `layer:` / `context:` / `type:` labels, applied automatically by `story-index.py create`. So the body is just:
+The body is **pure Gherkin** — no classification-header comments. The story's identity and classification (`STORY-NNN`, epic, layer, context, type) live on the work item's title and its `epic:` / `layer:` / `context:` / `type:` metadata, applied automatically by `tracker.py create`. So the body is just:
 
 ```gherkin
 Feature: Add customer discount at checkout
@@ -71,11 +80,11 @@ Feature: Add customer discount at checkout
       | gold   | 15      |
 ```
 
-You pass the classification (`--epic`, `--layer`, `--context`, `--type`) to `story-index.py create` as flags; the script turns them into labels and drops any stray `# STORY-NNN` / `# Epic:` header lines from the body. **Status is not passed in:** every story starts as `status:draft` and later transitions go through `gh-status` (see [Story state lives on the issue](#story-state-lives-on-the-github-issue)).
+You pass the classification (`--epic`, `--layer`, `--context`, `--type`) to `tracker.py create` as flags; the adapter turns them into work-item metadata and drops any stray `# STORY-NNN` / `# Epic:` header lines from the body. **Status is not passed in:** every story starts as `status:draft` and later transitions go through `set-status` (see [Story state lives on the work item](#story-state-lives-on-the-work-item)).
 
 ## Status lifecycle
 
-Every story carries a status that reflects where it is in the workflow. **The status lives on the GitHub issue** — as a `status:` label plus the open/closed state — and nowhere else. The states and the transitions between them are:
+Every story carries a status that reflects where it is in the workflow. **The status lives on the work item** — as a `status:` value plus the open/closed state — and nowhere else. The states and the transitions between them are:
 
 ```
           (created)                                    (planner sends back)
@@ -90,7 +99,7 @@ Every story carries a status that reflects where it is in the workflow. **The st
               │                                ▼                │
               └──────────────────────── in-progress ◄───────────┘
                                                │
-                                               │ (PR merged)
+                                               │ (change request merged)
                                                ▼
                                               done
 ```
@@ -109,9 +118,9 @@ Each transition is owned by exactly one skill. No skill flips a status it doesn'
 |---|---|---|
 | *(none)* → `draft` | `gherkin-story-authoring` | On story creation |
 | `draft` → `ready` | `gherkin-story-authoring` | **On explicit human approval only.** The skill does not self-promote stories. |
-| `ready` → `in-progress` | `tdd-loop-with-github` | At the branch-creation step, before any code is written |
-| `in-progress` → `done` | `tdd-loop-with-github` | After the PR is merged (observed on the next agent run) |
-| `in-progress` → `draft` | `tdd-loop-with-github` | When the planner hands back for story refinement |
+| `ready` → `in-progress` | `plan-story` | At the branch-creation step, before any code is written |
+| `in-progress` → `done` | `merge-story-pr` | After the change request is merged |
+| `in-progress` → `draft` | `plan-story` | When the planner hands back for story refinement |
 | any → `superseded` | `gherkin-story-authoring` | When the story is split |
 
 ### The draft → ready gate
@@ -122,26 +131,26 @@ When the human asks the skill to promote a story to `ready`:
 
 1. Run the quality checks first. If any fail, report what's wrong and stay at `draft`.
 2. If the checks pass, ask the human for explicit confirmation: "Story STORY-NNN passes the quality checks. Mark as ready for implementation?"
-3. Only on explicit confirmation, run `cd "$(git rev-parse --show-toplevel)" && python3 .claude/skills/gherkin-story-authoring/story-index.py gh-status STORY-NNN ready`.
+3. Only on explicit confirmation, run `cd "$(git rev-parse --show-toplevel)" && python3 .claude/skills/work-tracking/tracker.py set-status STORY-NNN ready`.
 
 This matches the pattern of the workflow's other human gates (Plan, Review, Merge): humans approve transitions, agents execute them.
 
-## Story state lives on the GitHub issue
+## Story state lives on the work item
 
-GitHub issues are the **single source of truth** for both story state and spec content (ADR-0021). Each story is one issue titled `STORY-NNN: <title>`; its `status:` label and open/closed state ARE the status, and its body IS the Gherkin. There are no story files — no `.feature`, no `# Status:` header, no `STORIES.md` index. Everything is managed through `story-index.py`; never hand-craft `gh issue` calls, and never re-create a `specs/stories/` file.
+The work item is the **single source of truth** for both story state and spec content. Each story is one work item titled `STORY-NNN: <title>`; its `status:` value and open/closed state ARE the status, and its body IS the Gherkin. There are no story files — no `.feature`, no `# Status:` header, no `STORIES.md` index. Everything is managed through the `work-tracking` façade; never hand-craft forge calls, and never re-create a `specs/stories/` file.
 
 - **On creation**, compose the Gherkin body (see below), write it to a scratch file, then run:
 
   ```
-  cd "$(git rev-parse --show-toplevel)" && python3 .claude/skills/gherkin-story-authoring/story-index.py create \
+  cd "$(git rev-parse --show-toplevel)" && python3 .claude/skills/work-tracking/tracker.py create \
     --title "<human-readable title>" --epic EPIC-NNN --layer <layer> --context "<context or —>" --type feature \
     --body-file <scratch-file>
   ```
 
-  It allocates the next id, creates the issue as `status:draft` with the body as content, applies `epic:` / `context:` / `layer:` / `type:` labels, attaches the epic milestone, and prints the allocated `STORY-NNN` and the issue URL. (You can pass `--body-file -` to pipe the body on stdin instead.)
-- **To refine** an existing story, edit its Gherkin and run `story-index.py update-body STORY-NNN --body-file <scratch-file>` to replace the issue body. This is the only correct edit path — editing the issue in the GitHub UI works too, but going through the script keeps behaviour consistent.
-- **On every status transition**, run `gh-status STORY-NNN <status>`. It swaps the `status:` label and closes the issue for terminal states (`done`, `superseded`, `cancelled`) or reopens it otherwise.
-- `create` and `update-body` **require** the `gh` CLI (there is nowhere else to put the content); `gh-status` degrades gracefully if `gh` is missing.
+  It allocates the next id, creates the work item as `status:draft` with the body as content, applies `epic:` / `context:` / `layer:` / `type:` metadata, attaches the epic grouping, and prints the allocated `STORY-NNN` and the work-item ref/URL. (You can pass `--body-file -` to pipe the body on stdin instead.)
+- **To refine** an existing story, edit its Gherkin and run `tracker.py update-body STORY-NNN --body-file <scratch-file>` to replace the work-item body. This is the only correct edit path.
+- **On every status transition**, run `set-status STORY-NNN <status>`. It swaps the status and closes the work item for terminal states (`done`, `superseded`, `cancelled`) or reopens it otherwise.
+- `create` and `update-body` **require** the backend to be available (there is nowhere else to put the content); `set-status` and `comment` degrade gracefully if it is missing.
 
 ## How to write good Gherkin
 
@@ -149,7 +158,7 @@ These are the rules. Follow them; they are the difference between executable spe
 
 ### Use ubiquitous language from the glossary
 
-Every noun and verb in the story should either already exist in `docs/domain/glossary.md` or be a candidate for addition. If you find yourself reaching for a synonym ("client" when the glossary says "customer"), stop and use the glossary term. If a needed term is not in the glossary, add a comment on the story issue (`gh issue comment <number> --body 'Glossary: needs term "X"'`) and continue. This becomes feedback for the `domain-storytelling` skill.
+Every noun and verb in the story should either already exist in `docs/domain/glossary.md` or be a candidate for addition. If you find yourself reaching for a synonym ("client" when the glossary says "customer"), stop and use the glossary term. If a needed term is not in the glossary, add a note on the story work item (`cd "$(git rev-parse --show-toplevel)" && python3 .claude/skills/work-tracking/tracker.py comment STORY-NNN --body 'Glossary: needs term "X"'`) and continue. This becomes feedback for the `domain-storytelling` skill.
 
 ### Declarative, not imperative
 
@@ -191,34 +200,34 @@ Stories originate from a **product goal or feature request** — something the p
    - Write the scenarios: at least one happy path **and** at least one negative or edge case
    - Add Scenario Outlines for any parameterized variation
 4. Verify every term is in the glossary (from the `domain-reader` summary); flag missing terms back per [Use ubiquitous language](#use-ubiquitous-language-from-the-glossary).
-5. Write the composed body to a scratch file, then create the issue (it allocates the id for you):
+5. Write the composed body to a scratch file, then create the work item (it allocates the id for you):
 
    ```
-   cd "$(git rev-parse --show-toplevel)" && python3 .claude/skills/gherkin-story-authoring/story-index.py create \
+   cd "$(git rev-parse --show-toplevel)" && python3 .claude/skills/work-tracking/tracker.py create \
      --title "<title>" --epic EPIC-NNN --layer <layer> --context "<context or —>" --type feature \
      --body-file <scratch-file>
    ```
 
-   This registers the story in the backlog — the issue, created as `status:draft`, is the record. Note the `STORY-NNN` it prints.
-6. The issue stays at `status:draft` until the human explicitly approves it for implementation (see Status lifecycle above).
+   This registers the story in the backlog — the work item, created as `status:draft`, is the record. Note the `STORY-NNN` it prints.
+6. The work item stays at `status:draft` until the human explicitly approves it for implementation (see Status lifecycle above).
 
 ## Splitting an existing story
 
-When the `tdd-loop-with-github` planner reports a story is too large (the "story refinement" feedback edge):
+When the planner reports a story is too large (the "story refinement" feedback edge):
 
-1. Read the original issue's body.
+1. Read the original work item's body (`tracker.py resolve STORY-NNN`).
 2. Identify the natural split — usually behaviors that share Background but have independent scenarios.
-3. Create a new issue per split (`story-index.py create ...`); each allocates its own new ID. Do not reuse the original ID.
+3. Create a new work item per split (`tracker.py create ...`); each allocates its own new ID. Do not reuse the original ID.
 4. Group the new stories under the same epic (or a new epic if the split reveals a larger structure).
-5. Close the original as superseded (`cd "$(git rev-parse --show-toplevel)" && python3 .claude/skills/gherkin-story-authoring/story-index.py gh-status STORY-NNN superseded`) and record the split on it: `gh issue comment <number> --body 'Split into STORY-051, STORY-052, STORY-053'`.
+5. Close the original as superseded (`cd "$(git rev-parse --show-toplevel)" && python3 .claude/skills/work-tracking/tracker.py set-status STORY-NNN superseded`) and record the split on it: `... tracker.py comment STORY-NNN --body 'Split into STORY-051, STORY-052, STORY-053'`.
 
-The closed `superseded` issue, with its comment, is the trail — there is no file to annotate.
+The closed `superseded` work item, with its note, is the trail — there is no file to annotate.
 
 ## Epics
 
-An epic is a GitHub **milestone** titled `EPIC-NNN: <name>` (ADR-0021) — there is no epic file. Its description holds the epic's goal, stories, and out-of-scope notes; `story-index.py create` attaches each story to the milestone derived from its `--epic` flag, so the milestone both describes the epic and groups its stories on the board.
+An epic is an epic **grouping** titled `EPIC-NNN: <name>` — there is no epic file. Its description holds the epic's goal, stories, and out-of-scope notes; `tracker.py create` attaches each story to the grouping derived from its `--epic` flag, so the grouping both describes the epic and collects its stories.
 
-Create a new epic by creating its milestone, with a description in this shape:
+Create a new epic with a description in this shape:
 
 ```markdown
 ## Goal
@@ -235,7 +244,8 @@ Loyalty customers see and receive their tier-based discount during checkout.
 ```
 
 ```
-gh api repos/{owner}/{repo}/milestones -f title="EPIC-NNN: <name>" -F description=@<file-or-->
+cd "$(git rev-parse --show-toplevel)" && python3 .claude/skills/work-tracking/tracker.py create-epic \
+  --title "EPIC-NNN: <name>" --body-file <file-or-->
 ```
 
 Then reference it from stories with `--epic EPIC-NNN`. Epics are flat — don't nest them.

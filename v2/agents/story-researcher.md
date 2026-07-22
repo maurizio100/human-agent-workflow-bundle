@@ -14,15 +14,15 @@ You will receive a story ID (e.g. `STORY-063`).
 
 ## What to read
 
-1. Read the story from its **GitHub issue** — it is the source of truth for content (ADR-0021):
+1. Read the story from its **work item** — it is the source of truth for content:
 
    ```
-   python3 .claude/skills/gherkin-story-authoring/story-index.py resolve STORY-NNN
+   cd "$(git rev-parse --show-toplevel)" && python3 .claude/skills/work-tracking/tracker.py resolve STORY-NNN
    ```
-   (returns `{number, title, body, labels}` as JSON)
+   (returns `{ref, title, body, labels}` as JSON)
 
-   Extract the feature title from the issue title and all scenario names from the body. Read layer / context / epic / type from the labels (`layer:…`, `context:…`, `epic:…`, `type:…`) — they are not in the body. If `gh` is unavailable or no issue exists, fall back to a legacy archive file (`specs/done/STORY-NNN-*` or `specs/cancelled/`).
-2. If an epic is referenced (an `epic:EPIC-NNN` label), read its description: `python3 .claude/skills/gherkin-story-authoring/story-index.py epic EPIC-NNN`.
+   Extract the feature title from the title and all scenario names from the body. Read layer / context / epic / type from the labels (`layer:…`, `context:…`, `epic:…`, `type:…`) — they are not in the body. If the tracker is unavailable or no work item exists, fall back to a legacy archive file (`specs/done/STORY-NNN-*` or `specs/cancelled/`).
+2. If an epic is referenced (an `epic:EPIC-NNN` label), read its description: `cd "$(git rev-parse --show-toplevel)" && python3 .claude/skills/work-tracking/tracker.py epic EPIC-NNN`.
 3. Read `docs/domain/glossary.md` — note terms relevant to this story's vocabulary.
 4. Read `docs/domain/contexts/<context>.md` — extract the current tactical model (aggregates, entities, value objects, domain services).
 5. Read `docs/domain/context-map.md` — from the Relationships table, note rows touching this context (as Upstream or Downstream).
