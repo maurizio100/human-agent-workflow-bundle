@@ -63,12 +63,10 @@ Create `docs/domain/glossary.md` with a header stub (the discovery-analysis skil
 ```markdown
 # Glossary
 
-The ubiquitous language of the domain. One row per term, sorted alphabetically
-by Term. Filled by the discovery-analysis skill; use only terms that appear here
-in Gherkin stories and plans.
-
-| Term | Context | Definition | Source | Notes |
-|------|---------|------------|--------|-------|
+The ubiquitous language of the domain, organized by Bounded Context. Filled by
+the discovery-analysis skill, which adds a `## Shared / Cross-context` table and
+a `## <Context>` section per context (see the `domain-artifacts` glossary
+template). Use only terms that appear here in Gherkin stories and plans.
 ```
 
 Create `docs/domain/context-map.md` with a header stub (the discovery-analysis skill fills it per the `domain-artifacts` context-map template):

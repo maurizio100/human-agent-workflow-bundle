@@ -33,16 +33,16 @@ Write to these files in the repo. Create folders if they don't exist. `<source-n
 
 ## Glossary
 
-**The global glossary is the single source of truth for the ubiquitous language.** There are no separate per-context glossary files — a per-context view is this table filtered by its `Context` column. Bounded-context files therefore *name* their terms and link here; they do not restate definitions (see the context-file template).
+**The global glossary is the single source of truth for the ubiquitous language**, organized by bounded context. There are no separate per-context glossary files — the one `glossary.md` holds a `## <Context>` section per context. Bounded-context files therefore *name* their terms and link here; they do not restate definitions (see the context-file template).
 
-`docs/domain/glossary.md`, following `assets/glossary-template.md`. Read that template before writing — it defines the table columns and conventions. Each row has:
-- **Term** — exactly as written in the source (preserve casing, spacing, and language — this is the ubiquitous language; do not translate or normalise).
-- **Context** — the bounded context(s) where the term is used. Same meaning across several contexts → one row, comma-separated. Divergent meaning → one row per context (see below).
-- **Definition** — one sentence derived from how the term is used.
-- **Source** — provenance, which numbered elements of the source it appears in.
-- **Notes** — aliases, see-also links, review flags.
+`docs/domain/glossary.md`, following `assets/glossary-template.md`. Read that template before writing — it defines the section layout, the table columns, and the conventions. Structure:
+- **`## Shared / Cross-context`** — terms used with **one identical meaning** in 2+ contexts. This table has a `Contexts` column listing the sharing contexts, comma-separated. One row per shared term.
+- **`## <Context>`** — one section per bounded context, holding the terms specific to that context. The context is implied by the heading, so these tables have **no** Context column.
+- **`## Unassigned`** — terms not yet mapped to any context. Omit the section when empty.
 
-**Insert** new rows at their alphabetical position — do not re-sort or rewrite existing rows. **Never overwrite an existing definition.** Because the same word can mean different things in different bounded contexts, divergent meanings get **one row per context** (same Term, different Context), cross-linked in Notes with a `⚠` conflict flag. If the same concept appears under two names in one source, do not unify silently — record both and flag it.
+Keep context sections alphabetical by context name (Shared first, Unassigned last); sort rows alphabetically by Term within each table. Each row has **Term** (exactly as written in the source — preserve casing, spacing, and language; do not translate or normalise), **Definition** (one sentence derived from how the term is used), **Source** (provenance, which numbered elements it appears in), and **Notes** (aliases, see-also links, review flags). The Shared table adds a **Contexts** column.
+
+**Insert** new terms at their alphabetical position in the right table — do not re-sort or rewrite existing rows. **Never overwrite an existing definition.** Because the same word can mean different things in different bounded contexts, divergent meanings are **not shared**: put one row in each relevant `## <Context>` table (same Term, different Definition), cross-linked in Notes with a `⚠` flag. Only terms with a genuinely identical meaning belong in `## Shared / Cross-context`. If the same concept appears under two names in one source, do not unify silently — record both and flag it.
 
 ## Bounded-context files
 
@@ -87,7 +87,7 @@ Use `Clarity` for confidence (`-` when unset, or `assumed` / `confirmed` / `need
 
 Analyzing a second (or third…) discovery source is a **merge-in-place**, never a rebuild. Existing content stays stable; you only add what's new. Per artifact:
 
-- **Glossary** — insert new terms at their alphabetical position; existing rows are untouched. The only edit to an existing row is extending its `Context` column when a known term now appears in a new context with the same meaning, or adding a new row (+ `⚠` flag) when the meaning diverges.
+- **Glossary** — insert new terms at their alphabetical position in the right section (Shared, a `## <Context>` section, or Unassigned); create a new `## <Context>` section when a genuinely new context appears. Existing rows are untouched except: extend a Shared row's `Contexts` column when a known term now appears in a new context with the same meaning; promote a term into `## Shared / Cross-context` when a second context adopts its exact meaning; or add a per-context row (+ `⚠` flag) when the meaning diverges.
 - **Context files** — open only the contexts the new source actually touches: extend Behaviour, add Participants/Concepts as needed. Untouched contexts are left alone. A genuinely new context is a new file. Never touch the Tactical model section.
 - **Context map** — add new contexts and relationship rows, then renumber the `#` column and recompute the `## Summary`. This is the only artifact where existing rows change (their `#` index), and it's cosmetic — identity is the Upstream/Downstream pair, not the number.
 - **Analysis record** — always a new file (`docs/domain/stories/<source-name>.analysis.md`), one per source; never edited to fold in another source.

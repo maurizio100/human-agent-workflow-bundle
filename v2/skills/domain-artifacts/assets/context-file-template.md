@@ -4,8 +4,9 @@
 
 <!-- Participants and Concepts NAME this context's terms and give their role
      here. They do NOT restate definitions — the definition lives once in
-     docs/domain/glossary.md (filter it by Context = this context). Each term
-     below should have a matching glossary row. -->
+     docs/domain/glossary.md, under this context's `## <name>` section (or in
+     `## Shared / Cross-context` if the term is shared). Each term below should
+     have a matching glossary row. -->
 
 ## Participants
 <!-- The people, roles, or systems that act within this context. A discovery

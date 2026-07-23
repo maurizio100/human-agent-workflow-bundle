@@ -14,7 +14,7 @@ You will receive one or more bounded context names.
 
 ## What to read
 
-1. `docs/domain/glossary.md` — read all rows; identify which terms are relevant to the specified contexts (filter by the `Context` column)
+1. `docs/domain/glossary.md` — read the `## <Context>` section for each specified context, plus any rows in `## Shared / Cross-context` whose `Contexts` include a specified context
 2. `docs/domain/contexts/<context>.md` for each specified context — extract description, participants, concepts, behaviour summary, and full tactical model
 3. `docs/domain/context-map.md` — from the Relationships table, extract all rows where the specified contexts appear (as Upstream or Downstream)
 

@@ -68,7 +68,7 @@ Look for clusters where:
 
 Each cluster is a **candidate** bounded context. Give it a provisional name based on the dominant activity or work object. Present candidates as proposals with the evidence (which activities, which actors); do not commit to boundaries. Write each as a context file per the contract's `context-file-template.md` — map Domain Storytelling **actors → Participants** and **work objects → Concepts**, and summarize the in-context activities (with activity numbers) under Behaviour.
 
-Once contexts are assigned, backfill the glossary's `Context` column for each term (the terms collected in Pass 2 get their context membership here). A term used in several contexts with the same meaning stays one row; a term that means something different per context splits into a row per context.
+Once contexts are assigned, file each Pass 2 term into the glossary under the right section (the terms collected in Pass 2 get their context membership here). A term used in one context goes in that `## <Context>` section; a term used in several contexts with the same meaning goes once in `## Shared / Cross-context`; a term that means something different per context gets a row in each relevant `## <Context>` section, cross-linked in Notes.
 
 A story with fewer than ~8 activities usually yields one context. Don't force a split.
 
